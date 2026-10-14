@@ -1,0 +1,6 @@
+#!/bin/sh
+# Opens the MacGlass window, or focuses it if it's already open (niri). Bound to a niri key and
+# used by the desktop entry.
+id=$(niri msg -j windows 2>/dev/null | jq -r 'first(.[] | select(.app_id == "dev.faruk.macglass") | .id) // empty')
+[ -n "$id" ] && exec niri msg action focus-window --id "$id"
+exec systemctl --user start macglass.service

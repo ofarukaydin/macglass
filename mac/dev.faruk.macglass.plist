@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Keeps MacGlass running in the login session. build.sh installs it to ~/Library/LaunchAgents,
+     replacing __HOME__ (launchd doesn't expand ~). -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>dev.faruk.macglass</string>
+    <key>Program</key>
+    <string>/Applications/MacGlass.app/Contents/MacOS/MacGlass</string>
+    <key>AssociatedBundleIdentifiers</key>
+    <array>
+        <string>dev.faruk.macglass</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+    <!-- The delayed "restore lid-close sleep" helper must outlive MacGlass (see Power.swift). -->
+    <key>AbandonProcessGroup</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/MacGlass.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/MacGlass.log</string>
+</dict>
+</plist>

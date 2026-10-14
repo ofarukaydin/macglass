@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=MacGlass
+Comment=The Mac's screen in a window, over Thunderbolt
+Exec=macglass-open
+Icon=preferences-desktop-remote-desktop
+Terminal=false
+Categories=Utility;RemoteAccess;
+StartupWMClass=dev.faruk.macglass

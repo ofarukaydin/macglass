@@ -1,0 +1,11 @@
+# MacGlass viewer as a user service, so it isn't tied to whatever started it. Started on demand by
+# macglass-open (niri key, app launcher); `make install` puts it in ~/.config/systemd/user.
+[Unit]
+Description=MacGlass: the Mac's screen in a window
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/macglass
+Restart=on-failure
+RestartSec=2
