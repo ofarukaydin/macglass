@@ -165,10 +165,19 @@ final class HEVCEncoder {
 }
 
 /// Picks and owns the full-frame encoder. The client asks for ProRes or HEVC (MG_SET_CODEC). For
-/// ProRes, 4444 is used unless the frame is too big for the M1 Pro's ProRes engine to keep up
-/// 120 fps (4444 tops out at ~113 fps at 5120x2160), where 422 HQ (~137 fps) takes over.
+/// ProRes, 4444 is used unless the frame is too big for an M1's ProRes engine to keep up 120 fps
+/// (on an M1 Pro 4444 tops out at ~113 fps at 5120x2160), where 422 HQ (~137 fps) takes over.
+/// Later engines have room to spare: an M5 Pro encodes 4444 at 5120x2160 at ~380 fps.
 final class FullFrameEncoders {
-    static let proRes4444PixelLimit = 9_500_000
+    static let proRes4444PixelLimit = cpuBrand().hasPrefix("Apple M1") ? 9_500_000 : Int.max
+
+    private static func cpuBrand() -> String {
+        var size = 0
+        sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
+        var buf = [CChar](repeating: 0, count: size)
+        sysctlbyname("machdep.cpu.brand_string", &buf, &size, nil, 0)
+        return String(cString: buf)
+    }
 
     private let forcedProRes: CMVideoCodecType?
     private let lock = NSLock()

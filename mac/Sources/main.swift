@@ -10,8 +10,8 @@ struct Options {
     var interface = "bridge0"
     var width = 5120
     var height = 2160
-    var hz = 120.0
-    var forcedProRes: CMVideoCodecType?  // default: 4444, or 422 HQ where 4444 can't do 120 fps
+    var hz = 165.0
+    var forcedProRes: CMVideoCodecType?  // default: 4444, or 422 HQ where 4444 can't keep up (M1)
     var audio = true
 
     static func parse() -> Options {
@@ -35,7 +35,8 @@ struct Options {
                 case "422": o.forcedProRes = kCMVideoCodecType_AppleProRes422
                 case "hq": o.forcedProRes = kCMVideoCodecType_AppleProRes422HQ
                 case "4444": o.forcedProRes = kCMVideoCodecType_AppleProRes4444
-                default: log("unknown codec \(value); use lt, 422, hq or 4444")
+                case "xq": o.forcedProRes = kCMVideoCodecType_AppleProRes4444XQ
+                default: log("unknown codec \(value); use lt, 422, hq, 4444 or xq")
                 }
             default: log("unknown option \(arg)")
             }
@@ -244,6 +245,7 @@ final class Session {
     func start() async {
         // macOS first restores the resolution it remembers for this display, then applies ours.
         let (w, h) = await appliedSize(initialSize)
+        display.preferRetina()
         display.becomeOnlyScreen()
         do { try await capturer.start(width: w, height: h) } catch { log("capture failed: \(error)") }
     }
@@ -259,12 +261,14 @@ final class Session {
     }
 
     func resize(_ w: Int, _ h: Int) async {
-        let w = min(max(w, 640), 7680), h = min(max(h, 360), 4320)
+        // Even sizes only, as in init: an odd size (a fractionally scaled window) drops the Mac to 1x.
+        let w = min(max(w, 640), 7680) & ~1, h = min(max(h, 360), 4320) & ~1
         guard display.resize(pixelWidth: w, pixelHeight: h) else {
             log("resize to \(w)x\(h) rejected")
             return
         }
         let (aw, ah) = await appliedSize((w, h))
+        display.preferRetina()
         display.becomeOnlyScreen()  // a mode change can drop the mirror
         do {
             try await capturer.resize(width: aw, height: ah)

@@ -45,6 +45,18 @@ final class VirtualDisplay {
         return display?.apply(settings) ?? false
     }
 
+    /// macOS picks the default mode by pixel density, and the fixed physical size makes a
+    /// window-sized display look sparse, so it defaults to 1x. Switches to the 2x mode if there is one.
+    func preferRetina() {
+        guard let current = CGDisplayCopyDisplayMode(displayID), current.width == current.pixelWidth else { return }
+        let options = [kCGDisplayShowDuplicateLowResolutionModes: true] as CFDictionary
+        let modes = CGDisplayCopyAllDisplayModes(displayID, options) as? [CGDisplayMode] ?? []
+        guard let retina = modes.first(where: {
+            $0.pixelWidth == current.pixelWidth && $0.pixelHeight == current.pixelHeight && $0.width * 2 == $0.pixelWidth
+        }) else { return }
+        configure { cfg in CGConfigureDisplayWithDisplayMode(cfg, displayID, retina, nil) }
+    }
+
     /// Makes this the Mac's only screen: every other display mirrors it, so the menu bar, Dock and
     /// windows all live here. Displays that appear later (opening the lid) are mirrored too.
     /// Mirroring ends by itself if this display goes away, even if MacGlass crashes.

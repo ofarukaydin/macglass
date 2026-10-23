@@ -1,6 +1,6 @@
 // Decoding. Full frames come as ProRes or HEVC 4:4:4, whichever the client asked the Mac for:
-//   - ProRes on the RX 9070 XT through FFmpeg's Vulkan decoder (~150 fps at 5120x2160 including
-//     the copy back to system memory, about half a CPU core), when the card is the host's;
+//   - ProRes on the RX 9070 XT through FFmpeg's Vulkan decoder (~170 fps at 5120x2160 4444
+//     including the copy back to system memory: 3 ms decode + 3 ms copy), when the card is the host's;
 //   - HEVC on the Intel iGPU's media engine through VAAPI while the Windows VM has the 9070 XT
 //     and the P-cores. Those frames stay on the iGPU and are drawn from there (render.c);
 //   - ProRes on the CPU as the fallback when neither GPU path is available.
@@ -231,6 +231,74 @@ static AVCodecContext *full_frame_decoder(uint32_t codec)
     return dec.prores;
 }
 
+// 9070 XT frames come back to system memory through av_hwframe_transfer_data. Into memory it
+// allocates itself that goes through a staging buffer plus a CPU copy (7.4 ms for a 5120x2160 4444
+// frame, ~9 GB/s). When every plane starts on a page, FFmpeg imports the destination as a Vulkan
+// host buffer and the card writes straight into it (3.0 ms, ~22 GB/s). The buffers must be plain
+// anonymous memory: memfd pages aren't accepted for that import.
+static struct {
+    AVBufferPool *pool;
+    size_t size; // of each buffer: all planes of one picture
+} sw;
+
+static void sw_free(void *opaque, uint8_t *mem)
+{
+    (void)opaque;
+    free(mem);
+}
+
+static AVBufferRef *sw_alloc(size_t size)
+{
+    void *mem = aligned_alloc(4096, size);
+    if (!mem)
+        return NULL;
+    AVBufferRef *buf = av_buffer_create(mem, size, sw_free, NULL, 0);
+    if (!buf)
+        free(mem);
+    return buf;
+}
+
+// A system-memory picture for `hw`, its planes page-aligned in one pooled buffer, or NULL when the
+// layout isn't one this handles (then FFmpeg allocates).
+static AVFrame *sw_frame_for(const AVFrame *hw)
+{
+    const AVHWFramesContext *fc = (const AVHWFramesContext *)hw->hw_frames_ctx->data;
+    const AVPixFmtDescriptor *d = av_pix_fmt_desc_get(fc->sw_format);
+    if (!d || !(d->flags & AV_PIX_FMT_FLAG_PLANAR) || d->nb_components > 4)
+        return NULL;
+    int nplanes = av_pix_fmt_count_planes(fc->sw_format);
+    int linesize[4];
+    size_t offset[4], size = 0;
+    for (int i = 0; i < nplanes; i++) {
+        bool chroma = i == 1 || i == 2;
+        int w = chroma ? AV_CEIL_RSHIFT(hw->width, d->log2_chroma_w) : hw->width;
+        int h = chroma ? AV_CEIL_RSHIFT(hw->height, d->log2_chroma_h) : hw->height;
+        linesize[i] = FFALIGN(w * d->comp[i].step, 64);
+        offset[i] = size;
+        size += FFALIGN((size_t)linesize[i] * h, 4096);
+    }
+    if (size != sw.size) {
+        av_buffer_pool_uninit(&sw.pool); // buffers still in use are freed when they come back
+        sw.pool = av_buffer_pool_init(size, sw_alloc);
+        sw.size = size;
+    }
+    AVBufferRef *buf = sw.pool ? av_buffer_pool_get(sw.pool) : NULL;
+    AVFrame *f = buf ? av_frame_alloc() : NULL;
+    if (!f) {
+        av_buffer_unref(&buf);
+        return NULL;
+    }
+    f->format = fc->sw_format;
+    f->width = hw->width;
+    f->height = hw->height;
+    f->buf[0] = buf;
+    for (int i = 0; i < nplanes; i++) {
+        f->data[i] = buf->data + offset[i];
+        f->linesize[i] = linesize[i];
+    }
+    return f;
+}
+
 static void request_keyframe(void)
 {
     Uint64 now = SDL_GetTicksNS();
@@ -320,15 +388,17 @@ void *decode_thread(void *arg)
             // 9070 XT frames have to cross to the iGPU anyway, so they come back to system
             // memory here. Intel VAAPI frames stay on the iGPU; render.c draws them in place.
             if (frame->format == AV_PIX_FMT_VULKAN) {
-                AVFrame *sw = av_frame_alloc();
-                if (av_hwframe_transfer_data(sw, frame, 0) < 0) {
-                    av_frame_free(&sw);
+                AVFrame *down = sw_frame_for(frame);
+                if (!down)
+                    down = av_frame_alloc();
+                if (av_hwframe_transfer_data(down, frame, 0) < 0) {
+                    av_frame_free(&down);
                     av_frame_free(&frame);
                     continue;
                 }
-                av_frame_copy_props(sw, frame);
+                av_frame_copy_props(down, frame);
                 av_frame_free(&frame);
-                frame = sw;
+                frame = down;
             }
             struct item *out = it;
             if (!out) {
@@ -356,5 +426,6 @@ void *decode_thread(void *arg)
     release_dgpu();
     avcodec_free_context(&dec.prores);
     av_buffer_unref(&dec.igpu);
+    av_buffer_pool_uninit(&sw.pool);
     return NULL;
 }

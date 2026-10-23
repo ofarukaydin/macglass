@@ -8,7 +8,7 @@ audio go both ways. With the lid closed, the Mac's only screen is the window.
 It also exposes the macOS Accessibility API one-to-one on the same link, so tools (and AI agents) on
 the Linux side can inspect and drive Mac apps.
 
-Built for one setup (MacBook Pro M1 Pro on macOS 27, a CachyOS/niri PC with an Intel Arrow Lake iGPU
+Built for one setup (a MacBook Pro M5 Pro, earlier an M1 Pro, on macOS 27, a CachyOS/niri PC with an Intel Arrow Lake iGPU
 driving the display and an RX 9070 XT that a Windows VM sometimes takes), but most of it is generic.
 
 ## How it works
@@ -43,7 +43,8 @@ driving the display and an RX 9070 XT that a Windows VM sometimes takes), but mo
 - A Thunderbolt cable between the machines, with networking on both ends: the Mac's Thunderbolt
   Bridge, and Linux's `thunderbolt_net`.
   - On the Linux side, load `thunderbolt_net` with `e2e=0`. With end-to-end flow control, traffic
-    from the Mac triggered an Apple Silicon kernel panic ("DART PTE invalid"). To make it permanent:
+    from the Mac triggered an Apple Silicon kernel panic ("DART PTE invalid") on an M1 Pro, and on
+    an M5 Pro it dropped the link after ~25 s at full speed. To make it permanent:
     `echo 'options thunderbolt_net e2e=0' | sudo tee /etc/modprobe.d/thunderbolt-net.conf`
 - **Mac:**
   - Xcode command line tools.
