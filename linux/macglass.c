@@ -735,6 +735,22 @@ static void update_title(void)
 
 static void update_dot(void);
 
+// Keeps the display awake while the Mac is in use here (watching a video on it sends no input),
+// which is while it's connected and this window has focus. Not otherwise: locking the screen takes
+// focus away, so the monitor still goes to sleep behind the lock.
+static void update_idle_inhibit(void)
+{
+    static bool inhibited;
+    bool want = in.connected && in.focused;
+    if (want == inhibited)
+        return;
+    inhibited = want;
+    if (want)
+        SDL_DisableScreenSaver();
+    else
+        SDL_EnableScreenSaver();
+}
+
 static void set_capture(bool on)
 {
     in.capture = on;
@@ -926,12 +942,14 @@ static void input_event(const SDL_Event *e)
     case SDL_EVENT_WINDOW_FOCUS_GAINED:
         in.focused = true;
         set_capture(true);
+        update_idle_inhibit();
         break;
     case SDL_EVENT_WINDOW_FOCUS_LOST:
         in.focused = false;
         in.escape_down = false;
         overlay_set_help(NULL);
         set_capture(false); // sends key-ups for everything held
+        update_idle_inhibit();
         break;
     }
 }
@@ -974,7 +992,7 @@ static void connection_changed(void)
         update_codec(true);
         release_all();
         set_capture(in.focused);
-        SDL_DisableScreenSaver(); // idle inhibit while the window is visible
+        update_idle_inhibit();
     } else if (!connected) {
         if (in.connected) {
             in.connected = false;
@@ -983,7 +1001,7 @@ static void connection_changed(void)
             if (mac_cursor)
                 SDL_DestroyCursor(mac_cursor);
             mac_cursor = NULL;
-            SDL_EnableScreenSaver();
+            update_idle_inhibit();
         }
         overlay_set_waiting(*reason ? reason : "connecting");
     }
@@ -1013,7 +1031,7 @@ int main(int argc, char **argv)
     // Fetch audio in ~5 ms chunks: PipeWire runs small quanta, and big chunks make the buffer saw.
     SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "256");
     SDL_SetHint(SDL_HINT_APP_ID, "dev.faruk.macglass");
-    SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1"); // inhibited only while a Mac is connected
+    SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1"); // inhibited only while in use (update_idle_inhibit)
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
