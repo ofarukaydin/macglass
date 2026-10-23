@@ -8,6 +8,18 @@ audio go both ways. With the lid closed, the Mac's only screen is the window.
 It also exposes the macOS Accessibility API one-to-one on the same link, so tools (and AI agents) on
 the Linux side can inspect and drive Mac apps.
 
+![MacGlass on a 5120x2160 niri desktop: the Mac on the left, a Linux terminal with the viewer's log on the right](docs/screenshot.jpg)
+
+*Left: the Mac (an M5 Pro) in a MacGlass window, with the stats panel open (Right Ctrl + D). Right: a
+terminal on the Linux PC following the viewer's log. The Mac's display is 2540x2134, the window's size
+in pixels, and follows it as the window is resized.*
+
+<img src="docs/stats-overlay.png" alt="1:1 crop of the window: the stats panel over the Mac's menu bar and a Finder window" width="750">
+
+*A 1:1 crop of the same window: what you see is the Mac's own pixels, ProRes 4444 decoded on the RX
+9070 XT. The panel shows the picture size, decoder, frames and patches received, decode time per
+picture, frames shown and audio buffering.*
+
 Built for one setup (a MacBook Pro M5 Pro, earlier an M1 Pro, on macOS 27, a CachyOS/niri PC with an Intel Arrow Lake iGPU
 driving the display and an RX 9070 XT that a Windows VM sometimes takes), but most of it is generic.
 
